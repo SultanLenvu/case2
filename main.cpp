@@ -1,9 +1,10 @@
 
 #include "mbed.h"
 
-#include "Sht31.h"
-#include "LIS331.h"
-#include "VL6180.h"
+#include "Sht31.h"  // Датчик влажности и температуры
+#include "LIS331.h" // Акселерометр
+#include "VL6180.h" // Дальномер
+#include <cstdio>
 
 //=============================================================
 //  Первая часть лабораторной работы 2
@@ -65,41 +66,94 @@ int main()
 //=============================================================
 //  Вторая часть лабораторной работы 2
 //=============================================================
-DigitalOut led1(LED1);
 
-InterruptIn button1(USER_BUTTON);
-volatile bool button1_pressed = false; // Used in the main loop
-volatile bool button1_enabled = true; // Used for debouncing
-Timeout button1_timeout; // Used for debouncing
+/*
 
-// Enables button when bouncing is over
-void button1_enabled_cb(void)
+void print_char(char c = '*')
 {
-    button1_enabled = true;
+    printf("%c", c);
+    fflush(stdout);
 }
 
-// ISR handling button pressed event
-void button1_onpressed_cb(void)
+Thread thread;
+
+DigitalOut led1(LED1);
+
+void print_thread()
 {
-    if (button1_enabled) { // Disabled while the button is bouncing
-        button1_enabled = false;
-        button1_pressed = true; // To be read by the main loop
-        button1_timeout.attach(callback(button1_enabled_cb), 0.3); // Debounce time 300 ms
+    while (true) {
+        wait(1);
+        print_char();
     }
 }
 
 int main()
 {
-    //button1.mode(PullUp); // Activate pull-up
-    button1.fall(callback(button1_onpressed_cb)); // Attach ISR to handle button press event
-
-    int idx = 0; // Just for printf below
-
-    while(1) {
-        if (button1_pressed) { // Set when button is pressed
-            button1_pressed = false;
-            printf("Button pressed %d\n", idx++);
-            led1 = !led1;
-        }
+    printf("\n\n*** RTOS basic example ***\n");
+    thread.start(print_thread);
+    while (true) {
+        led1 = !led1;
+        wait(0.5);
     }
 }
+
+
+*/
+
+//=============================================================
+//  Практикум лабораторной работы 2
+//=============================================================
+
+#define MEASURING_FREQUENCY 0.5
+#define UPPER_LIMIT 0.4 
+#define LOWER_LIMIT 0.2
+
+//sda, scl
+//Sht31   humidity_sensor(I2C_SDA, I2C_SCL);
+AnalogIn adc(PA_7);
+
+DigitalOut led1(LED1);
+Ticker sensor_timer; // Used for debouncing
+
+Thread thread;
+
+volatile float blinkingFrequency = 1.0;
+
+void blinking(void){
+    while(1) {
+        led1 = !led1;
+        wait(blinkingFrequency);
+    }
+}
+
+void measureHumidity(void) {
+    float h = 0;
+    
+    //h = humidity_sensor.readHumidity();
+    h = adc.read();
+
+    if ((h > 0.2) || (h < 0.4)){
+        blinkingFrequency = 0.25;
+        printf("WARNING: Humidity is out of tolerance limits: %f\n", h);
+        fflush(stdout);
+    }
+    else {
+        blinkingFrequency = 1;
+        printf("Current humidity: %f\n", h);
+        fflush(stdout);
+    }
+}
+
+int main() {
+    //sensor_timer.attach(&measureHumidity, MEASURING_FREQUENCY);
+    //led_timer.attach(&blinking, blinkingFrequency);
+
+    thread.start(blinking);
+
+    while(1) {
+        measureHumidity();
+        wait(1);
+    }
+}
+
+
